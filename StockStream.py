@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime
 from datetime import date
-from plotly import graph_objs as go
+import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 from prophet import Prophet
 from prophet.plot import plot_plotly
@@ -11,6 +11,8 @@ from streamlit_option_menu import option_menu
 import os
 os.environ["YFINANCE_CACHE_DIR"] = "/tmp"
 import yfinance as yf
+import matplotlib.pyplot as plt
+import mplfinance as mpf
 
 
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
@@ -55,10 +57,10 @@ if selected == 'Stocks Performance Comparison':
         return cumret.fillna(0)
 
     if dropdown:
-        df = relativeret(yf.download(symb_list, start, end))['Adj Close']
+        df = yf.download(symb_list, start=start, end=end, auto_adjust=False)['Adj Close']
         raw_df = relativeret(yf.download(symb_list, start, end)).reset_index()
 
-        closingPrice = yf.download(symb_list, start, end)['Adj Close']
+        closingPrice = yf.download(symb_list, start=start, end=end, auto_adjust=False)['Adj Close']
         volume = yf.download(symb_list, start, end)['Volume']
         
         st.subheader(f'Raw Data {dropdown}')
@@ -103,42 +105,121 @@ elif selected == 'Real-Time Stock Price':
         time.sleep(2)
 
     dict_csv = pd.read_csv('StockStreamTickersData.csv', header=None, index_col=0).to_dict()[1]
-    symb_list = [dict_csv.get(a)]
+    # ticker = dict_csv.get(a)
 
-    if "button_clicked" not in st.session_state:
-        st.session_state.button_clicked = False
 
-    def callback():
-        st.session_state.button_clicked = True
+    # if "button_clicked" not in st.session_state:
+    #     st.session_state.button_clicked = False
 
-    if st.button("Search", on_click=callback) or st.session_state.button_clicked:
-        if not a:
-            st.write("Click Search to Search for a Company")
-        else:
-            data = yf.download(symb_list, start=start, end=end)
-            data.reset_index(inplace=True)
-            st.subheader(f'Raw Data of {a}')
-            st.write(data)
+    # def callback():
+    #     st.session_state.button_clicked = True
 
-            def plot_raw_data():
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="stock_open"))
-                fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="stock_close"))
-                fig.layout.update(title_text=f'Line Chart of {a}', xaxis_rangeslider_visible=True)
-                st.plotly_chart(fig)
+    # if st.button("Search", on_click=callback) or st.session_state.button_clicked:
+    #     if not a:
+    #         st.write("Click Search to Search for a Company")
+    #     else:
+    #         data = yf.download(ticker, start=start, end=end)     
+    #         data.reset_index(inplace=True)
+    #         st.subheader(f'Raw Data of {a}')
+    #         st.write(data)
 
-            def plot_candle_data():
-                fig = go.Figure()
-                fig.add_trace(go.Candlestick(x=data['Date'], open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'], name='market data'))
-                fig.update_layout(title=f'Candlestick Chart of {a}', yaxis_title='Stock Price', xaxis_title='Date')
-                st.plotly_chart(fig)
+    #         def plot_raw_data():
+    #             fig = go.Figure()
+    #             fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="stock_open"))
+    #             fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="stock_close"))
+    #             fig.layout.update(title_text=f'Line Chart of {a}', xaxis_rangeslider_visible=True)
+    #             st.plotly_chart(fig)
 
-            chart = ('Candle Stick', 'Line Chart')
-            dropdown1 = st.selectbox('Pick your chart', chart)
-            if dropdown1 == 'Candle Stick':
-                plot_candle_data()
-            elif dropdown1 == 'Line Chart':
-                plot_raw_data()
+    #         def plot_candle_data():
+    #             fig = go.Figure()
+    #             fig.add_trace(go.Candlestick(x=data['Date'], open=data['Open'], high=data['High'], low=data['Low'], close=data['Close'], name='market data'))
+    #             fig.update_layout(title=f'Candlestick Chart of {a}', yaxis_title='Stock Price', xaxis_title='Date')
+    #             st.plotly_chart(fig)
+
+    #         chart = ('Candle Stick', 'Line Chart')
+    #         dropdown1 = st.selectbox('Pick your chart', chart)
+    #         if dropdown1 == 'Candle Stick':
+    #             plot_candle_data()
+    #         elif dropdown1 == 'Line Chart':
+    #             plot_raw_data()
+    
+    ticker = dict_csv.get(a)
+    data = yf.download(ticker, start=start, end=end)
+
+    # Flatten columns if needed
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.get_level_values(0)
+
+    data.dropna(subset=['Open', 'High', 'Low', 'Close'], inplace=True)
+    data.index = pd.to_datetime(data.index)
+
+    st.subheader(f'Raw Data of {a}')
+    st.write(data)
+
+    chart = st.selectbox('Pick your chart', ('Candle Stick', 'Line Chart'))
+
+    if chart == 'Candle Stick':
+        st.subheader(f'Candlestick Chart of {a}')
+        fig_candle, _ = mpf.plot(
+            data, type='candle', style='charles',
+            volume=True, show_nontrading=True, returnfig=True
+        )
+        st.pyplot(fig_candle)
+
+    elif chart == 'Line Chart':
+        st.subheader(f'Line Chart of {a}')
+        fig_line, ax = plt.subplots()
+        data[['Open', 'Close']].plot(ax=ax)
+        ax.set_title(f'Line Chart of {a}')
+        ax.set_ylabel('Price')
+        st.pyplot(fig_line)
+
+
+# elif selected == 'Stock Prediction':
+#     st.subheader("Stock Prediction")
+#     tickers = stock_df["Company Name"]
+#     a = st.selectbox('Pick a Company', tickers)
+
+#     with st.spinner('Loading...'):
+#         time.sleep(2)
+
+#     dict_csv = pd.read_csv('StockStreamTickersData.csv', header=None, index_col=0).to_dict()[1]
+#     symb_list = [dict_csv.get(a)]
+
+#     if a:
+#         data = yf.download(symb_list, start=start, end=end)
+#         data.reset_index(inplace=True)
+#         st.subheader(f'Raw Data of {a}')
+#         st.write(data)
+
+#         def plot_raw_data():
+#             fig = go.Figure()
+#             fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="stock_open"))
+#             fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="stock_close"))
+#             fig.layout.update(title_text=f'Time Series Data of {a}', xaxis_rangeslider_visible=True)
+#             st.plotly_chart(fig)
+
+#         plot_raw_data()
+
+#         n_years = st.slider('Years of prediction:', 1, 4)
+#         period = n_years * 365
+
+#         df_train = data[['Date', 'Close']].rename(columns={"Date": "ds", "Close": "y"})
+#         m = Prophet()
+#         m.fit(df_train)
+#         future = m.make_future_dataframe(periods=period)
+#         forecast = m.predict(future)
+
+#         st.subheader(f'Forecast Data of {a}')
+#         st.write(forecast)
+
+#         st.subheader(f'Forecast plot for {n_years} years')
+#         fig1 = plot_plotly(m, forecast)
+#         st.plotly_chart(fig1)
+
+#         st.subheader(f"Forecast components of {a}")
+#         fig2 = m.plot_components(forecast)
+#         st.write(fig2)
 
 elif selected == 'Stock Prediction':
     st.subheader("Stock Prediction")
@@ -149,29 +230,25 @@ elif selected == 'Stock Prediction':
         time.sleep(2)
 
     dict_csv = pd.read_csv('StockStreamTickersData.csv', header=None, index_col=0).to_dict()[1]
-    symb_list = [dict_csv.get(a)]
+    ticker = dict_csv.get(a)
 
-    if a:
-        data = yf.download(symb_list, start=start, end=end)
+    if a and ticker:
+        data = yf.download(ticker, start=start, end=end, auto_adjust=False)
         data.reset_index(inplace=True)
+        
         st.subheader(f'Raw Data of {a}')
         st.write(data)
-
-        def plot_raw_data():
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=data['Date'], y=data['Open'], name="stock_open"))
-            fig.add_trace(go.Scatter(x=data['Date'], y=data['Close'], name="stock_close"))
-            fig.layout.update(title_text=f'Time Series Data of {a}', xaxis_rangeslider_visible=True)
-            st.plotly_chart(fig)
-
-        plot_raw_data()
 
         n_years = st.slider('Years of prediction:', 1, 4)
         period = n_years * 365
 
-        df_train = data[['Date', 'Close']].rename(columns={"Date": "ds", "Close": "y"})
+        # Prepare data for Prophet
+        df_train = data[['Date', 'Close']].copy()
+        df_train.columns = ['ds', 'y']
+
         m = Prophet()
         m.fit(df_train)
+
         future = m.make_future_dataframe(periods=period)
         forecast = m.predict(future)
 
@@ -185,6 +262,11 @@ elif selected == 'Stock Prediction':
         st.subheader(f"Forecast components of {a}")
         fig2 = m.plot_components(forecast)
         st.write(fig2)
+    else:
+        st.warning("Ticker not found for selected company.")
+
+
+
 
 elif selected == 'About':
     st.subheader("About")
@@ -196,5 +278,6 @@ elif selected == 'About':
     """, unsafe_allow_html=True)
     
     st.markdown('<p class="big-font">StockStream is a web application for stock performance comparison, real-time stock prices, and prediction, developed using Streamlit. Created by Vaishnavi Sharma and Rohit More.</p>', unsafe_allow_html=True)
-    st.subheader('Rohit More [GitHub](https://github.com/rohitmore1012)')
-    st.subheader('Vaishnavi Sharma [GitHub](https://github.com/vaishnavi3131)')
+   
+    st.subheader('Venkat Macha [GitHub](https://github.com/venkat591)')
+    
